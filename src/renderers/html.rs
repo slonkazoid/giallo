@@ -8,7 +8,7 @@ use crate::renderers::RenderOptions;
 use crate::themes::{Color, ThemeVariant};
 
 /// Where to put the additional attributes
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DataAttrPosition {
     /// On the <pre> only
     Pre,
