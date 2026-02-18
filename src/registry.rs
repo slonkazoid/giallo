@@ -491,7 +491,6 @@ impl Registry {
     /// Dump the registry + scope repository to a binary file that can be loaded later
     pub fn dump_to_file(&self, path: impl AsRef<Path>) -> GialloResult<()> {
         use crate::scope::lock_global_scope_repo;
-        use flate2::{Compression, write::GzEncoder};
         use std::io::Write;
 
         // Create a Dump containing both Registry and current ScopeRepository
@@ -503,9 +502,9 @@ impl Registry {
 
         let msgpack_data = rmp_serde::to_vec(&dump)?;
         let file = std::fs::File::create(path)?;
-        let mut encoder = GzEncoder::new(file, Compression::default());
-        encoder.write_all(&msgpack_data)?;
-        encoder.finish()?;
+        let mut z = zstd::Encoder::new(file, 5)?;
+        z.write_all(&msgpack_data)?;
+        z.finish()?;
 
         Ok(())
     }
@@ -513,10 +512,9 @@ impl Registry {
     #[cfg(feature = "dump")]
     fn load_from_bytes(compressed_data: &[u8]) -> GialloResult<Self> {
         use crate::scope::replace_global_scope_repo;
-        use flate2::read::GzDecoder;
         use std::io::Read;
 
-        let mut decoder = GzDecoder::new(compressed_data);
+        let mut decoder = zstd::Decoder::new(compressed_data)?;
         let mut msgpack_data = Vec::new();
         decoder.read_to_end(&mut msgpack_data)?;
 
