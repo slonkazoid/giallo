@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("- Registered aliases: {} total", aliases_registered);
 
     // Serialize Registry to compressed MessagePack format
-    println!("\nSerializing Registry with MessagePack + flate2 compression...");
+    println!("\nSerializing Registry with MessagePack + zstd compression...");
 
     // Calculate uncompressed MessagePack size for comparison
     let msgpack_data = rmp_serde::to_vec(&registry)?;
