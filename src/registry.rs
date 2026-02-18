@@ -502,9 +502,9 @@ impl Registry {
 
         let msgpack_data = rmp_serde::to_vec(&dump)?;
         let file = std::fs::File::create(path)?;
-        let mut z = zstd::Encoder::new(file, 5)?;
-        z.write_all(&msgpack_data)?;
-        z.finish()?;
+        let mut encoder = zstd::Encoder::new(file, 5)?;
+        encoder.write_all(&msgpack_data)?;
+        encoder.finish()?;
 
         Ok(())
     }
