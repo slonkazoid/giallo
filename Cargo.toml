@@ -31,7 +31,6 @@ zstd = { version = "0.13.3", optional = true }
 log = { version = "0.4", optional = true }
 
 [features]
-bench = []
 tools = ["dump"]
 debug = ["dep:log"]
 dump = ["dep:rmp-serde", "dep:zstd"]
@@ -51,7 +50,7 @@ debug = true
 [[bench]]
 name = "registry"
 harness = false
-required-features = ["dump", "bench"]
+required-features = ["dump"]
 
 [[bench]]
 name = "highlight_benchmark"

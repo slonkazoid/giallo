@@ -115,7 +115,7 @@ pub(crate) fn normalize_string(s: &str) -> String {
 ///
 /// Holds all the grammars and themes and is responsible for highlighting a text. It is not
 /// responsible for actually rendering those highlighted texts.
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Default)]
 pub struct Registry {
     // Vector of compiled grammars for ID-based access
     pub(crate) grammars: Vec<CompiledGrammar>,
@@ -135,7 +135,6 @@ pub struct Registry {
     // We cache the pattern set at the registry level it's compiled only once instead of per
     // highlight. To do that we had to check the end regex in the tokenizer separately from the
     // regset.
-    #[serde(skip)]
     pattern_cache: papaya::HashMap<(GrammarId, GlobalRuleRef), Arc<PatternSet>>,
 }
 
@@ -579,9 +578,9 @@ impl Registry {
         Ok(registry)
     }
 
-    #[cfg(all(feature = "dump", feature = "bench"))]
+    #[cfg(all(feature = "dump"))]
     #[inline(always)]
-    /// Used for benchmarking
+    #[doc(hidden)]
     pub fn load_from_compressed_bytes_bench(compressed_data: &[u8]) -> GialloResult<Self> {
         Self::load_from_compressed_bytes(compressed_data)
     }
