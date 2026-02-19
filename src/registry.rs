@@ -35,6 +35,16 @@ impl Dump {
 }
 
 #[cfg(feature = "dump")]
+#[derive(Debug, Clone, Copy)]
+/// Extra information about the generated dump.
+pub struct DumpStats {
+    /// Uncompressed dump size/
+    pub uncompressed_size: u64,
+    /// Size on disk after applying compression.
+    pub compressed_size: u64,
+}
+
+#[cfg(feature = "dump")]
 const BUILTIN_DATA: &[u8] = include_bytes!("../builtin.msgpack");
 
 /// The default grammar name, where nothing is highlighted
@@ -534,9 +544,9 @@ impl Registry {
 
     #[cfg(feature = "dump")]
     /// Dump the registry + scope repository to a binary file that can be loaded later
-    pub fn dump_to_file(&self, path: impl AsRef<Path>) -> GialloResult<()> {
+    pub fn dump_to_file(&self, path: impl AsRef<Path>) -> GialloResult<DumpStats> {
         use crate::scope::lock_global_scope_repo;
-        use std::io::Write;
+        use std::io::{Seek, Write};
 
         // Create a Dump containing both Registry and current ScopeRepository
         let scope_repo = lock_global_scope_repo().clone();
@@ -548,12 +558,17 @@ impl Registry {
         };
 
         let msgpack_data = rmp_serde::to_vec(&dump)?;
+        let uncompressed_size = msgpack_data.len() as u64;
         let file = std::fs::File::create(path)?;
         let mut encoder = zstd::Encoder::new(file, 5)?;
         encoder.write_all(&msgpack_data)?;
-        encoder.finish()?;
+        let mut file = encoder.finish()?;
+        let compressed_size = file.seek(std::io::SeekFrom::Current(0))?;
 
-        Ok(())
+        Ok(DumpStats {
+            uncompressed_size,
+            compressed_size,
+        })
     }
 
     #[cfg(feature = "dump")]

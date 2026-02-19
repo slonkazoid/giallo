@@ -1,4 +1,4 @@
-use giallo::{PLAIN_GRAMMAR_NAME, Registry};
+use giallo::{DumpStats, PLAIN_GRAMMAR_NAME, Registry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -139,38 +139,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Serialize Registry to compressed MessagePack format
     println!("\nSerializing Registry with MessagePack + zstd compression...");
 
-    // Calculate uncompressed MessagePack size for comparison
-    let msgpack_data = rmp_serde::to_vec(&registry)?;
-    let uncompressed_size = msgpack_data.len();
+    // Save compressed version using Registry's dump_to_file method
+    let DumpStats {
+        uncompressed_size,
+        compressed_size,
+    } = registry.dump_to_file("builtin.msgpack")?;
     let uncompressed_mb = uncompressed_size as f64 / (1024.0 * 1024.0);
 
-    // Save compressed version using Registry's dump_to_file method
-    registry.dump_to_file("builtin.msgpack")?;
-
-    // Check compressed file size
-    let compressed_metadata = fs::metadata("builtin.msgpack")?;
-    let compressed_size = compressed_metadata.len();
     let compressed_mb = compressed_size as f64 / (1024.0 * 1024.0);
 
     // Calculate compression statistics
     let compression_ratio = uncompressed_size as f64 / compressed_size as f64;
-    let size_reduction =
-        ((uncompressed_size as f64 - compressed_size as f64) / uncompressed_size as f64) * 100.0;
+    let size_reduction = 100.0 - (compressed_size as f64 / uncompressed_size as f64) * 100.0;
 
     println!("\n=== COMPRESSION RESULTS ===");
-    println!(
-        "Uncompressed MessagePack: {:.2} MB ({} bytes)",
-        uncompressed_mb, uncompressed_size
-    );
-    println!(
-        "Compressed file:          {:.2} MB ({} bytes)",
-        compressed_mb, compressed_size
-    );
-    println!(
-        "Compression ratio:        {:.2}x smaller",
-        compression_ratio
-    );
-    println!("Size reduction:           {:.1}% smaller", size_reduction);
+    println!("Uncompressed MessagePack: {uncompressed_mb:.2} MiB ({uncompressed_size} bytes)");
+    println!("Compressed file:          {compressed_mb:.2} MiB ({compressed_size} bytes)");
+    println!("Compression ratio:        {compression_ratio:.2}x smaller");
+    println!("Size reduction:           {size_reduction:.1}% smaller");
     println!("✓ Registry saved to builtin.msgpack");
 
     println!("\nBuild complete!");
