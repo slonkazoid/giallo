@@ -7,14 +7,14 @@ description = "A code highlighter giving the same output as VSCode"
 repository = "https://github.com/getzola/giallo"
 
 include = [
-    "src/**/*.rs",
-    "benches/**/*",
-    "examples/**/*",
-    "tools/**/*",
-    "Cargo.toml",
-    "/LICENSE",
-    "/README.md",
-    "builtin.msgpack",
+  "src/**/*.rs",
+  "benches/**/*",
+  "examples/**/*",
+  "tools/**/*",
+  "Cargo.toml",
+  "/LICENSE",
+  "/README.md",
+  "builtin.msgpack",
 ]
 
 
@@ -31,6 +31,7 @@ zstd = { version = "0.13.3", optional = true }
 log = { version = "0.4", optional = true }
 
 [features]
+bench = []
 tools = ["dump"]
 debug = ["dep:log"]
 dump = ["dep:rmp-serde", "dep:zstd"]
@@ -50,7 +51,7 @@ debug = true
 [[bench]]
 name = "registry"
 harness = false
-required-features = ["dump"]
+required-features = ["dump", "bench"]
 
 [[bench]]
 name = "highlight_benchmark"
@@ -89,5 +90,3 @@ required-features = ["dump"]
 name = "build-registry"
 path = "tools/build_registry.rs"
 required-features = ["tools"]
-
-

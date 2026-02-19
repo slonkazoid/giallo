@@ -20,8 +20,18 @@ use crate::tokenizer::{Token, Tokenizer};
 #[cfg(feature = "dump")]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct Dump {
-    registry: Registry,
-    scope_repo: ScopeRepository,
+    grammars: Vec<CompiledGrammar>,
+    themes: HashMap<String, CompiledTheme>, // could be just a vec?
+    linked: bool,
+    atoms: Vec<String>,
+}
+
+impl Dump {
+    pub fn restore(self) -> (Registry, ScopeRepository) {
+        let registry = Registry::restore(self.grammars, self.themes, self.linked);
+        let scope_repo = ScopeRepository::from_atoms(self.atoms);
+        (registry, scope_repo)
+    }
 }
 
 #[cfg(feature = "dump")]
@@ -144,6 +154,42 @@ impl Clone for Registry {
 }
 
 impl Registry {
+    /// Restore a registry from a list of grammars and themes.
+    /// This is used in loading dumps.
+    pub fn restore(
+        grammars: Vec<CompiledGrammar>,
+        themes: HashMap<String, CompiledTheme>,
+        linked: bool,
+    ) -> Self {
+        let mut grammar_id_by_scope_name = HashMap::with_capacity(grammars.len());
+        let mut grammar_id_by_name = HashMap::with_capacity(grammars.len());
+        let mut injections_by_grammar = Vec::with_capacity(grammars.len());
+
+        for grammar in &grammars {
+            grammar_id_by_scope_name.insert(grammar.scope_name.to_lowercase(), grammar.id);
+            grammar_id_by_name.insert(grammar.name.to_lowercase(), grammar.id);
+            injections_by_grammar.push(HashSet::with_capacity(grammar.injections.len()));
+        }
+
+        let pattern_cache = papaya::HashMap::new();
+
+        let mut this = Self {
+            grammars,
+            grammar_id_by_scope_name,
+            grammar_id_by_name,
+            themes,
+            injections_by_grammar,
+            linked,
+            pattern_cache,
+        };
+
+        if linked {
+            this.link_grammars();
+        }
+
+        this
+    }
+
     fn add_grammar_from_raw(&mut self, raw_grammar: RawGrammar) -> GialloResult<()> {
         if self.linked && self.grammar_id_by_name.contains_key(&raw_grammar.name) {
             return Err(Error::ReplacingGrammarPostLinking(
@@ -496,8 +542,10 @@ impl Registry {
         // Create a Dump containing both Registry and current ScopeRepository
         let scope_repo = lock_global_scope_repo().clone();
         let dump = Dump {
-            registry: self.clone(),
-            scope_repo,
+            grammars: self.grammars.clone(),
+            themes: self.themes.clone(),
+            linked: self.linked,
+            atoms: scope_repo.atoms.clone(),
         };
 
         let msgpack_data = rmp_serde::to_vec(&dump)?;
@@ -510,18 +558,32 @@ impl Registry {
     }
 
     #[cfg(feature = "dump")]
-    fn load_from_bytes(compressed_data: &[u8]) -> GialloResult<Self> {
-        use crate::scope::replace_global_scope_repo;
+    fn load_from_compressed_bytes(compressed_data: &[u8]) -> GialloResult<Self> {
         use std::io::Read;
 
         let mut decoder = zstd::Decoder::new(compressed_data)?;
         let mut msgpack_data = Vec::new();
         decoder.read_to_end(&mut msgpack_data)?;
 
-        let dump: Dump = rmp_serde::from_slice(&msgpack_data)?;
-        replace_global_scope_repo(dump.scope_repo);
+        Self::load_from_serialized_bytes(&msgpack_data)
+    }
 
-        Ok(dump.registry)
+    #[cfg(feature = "dump")]
+    fn load_from_serialized_bytes(buffer: &[u8]) -> GialloResult<Self> {
+        use crate::scope::replace_global_scope_repo;
+
+        let dump: Dump = rmp_serde::from_slice(buffer)?;
+        let (registry, scope_repo) = dump.restore();
+        replace_global_scope_repo(scope_repo);
+
+        Ok(registry)
+    }
+
+    #[cfg(all(feature = "dump", feature = "bench"))]
+    #[inline(always)]
+    /// Used for benchmarking
+    pub fn load_from_compressed_bytes_bench(compressed_data: &[u8]) -> GialloResult<Self> {
+        Self::load_from_compressed_bytes(compressed_data)
     }
 
     #[cfg(feature = "dump")]
@@ -530,7 +592,7 @@ impl Registry {
     /// to call Registry::load_from_file, only the first one will actually load things.
     pub fn load_from_file(path: impl AsRef<Path>) -> GialloResult<Self> {
         let compressed_data = std::fs::read(path)?;
-        Self::load_from_bytes(&compressed_data)
+        Self::load_from_compressed_bytes(&compressed_data)
     }
 
     #[cfg(feature = "dump")]
@@ -538,7 +600,7 @@ impl Registry {
     /// This is a no-op when called multiple times: eg if you have multiple threads all trying
     /// to call Registry::builtin, only the first one will actually load things.
     pub fn builtin() -> GialloResult<Self> {
-        Self::load_from_bytes(BUILTIN_DATA)
+        Self::load_from_compressed_bytes(BUILTIN_DATA)
     }
 }
 

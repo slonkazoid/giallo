@@ -110,40 +110,25 @@ impl fmt::Display for Scope {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ScopeRepository {
     /// Index-to-string mapping
-    atoms: Vec<String>,
+    pub(crate) atoms: Vec<String>,
     /// String-to-index for fast lookup
     atom_index_map: HashMap<String, usize>,
-}
-
-impl<'de> Deserialize<'de> for ScopeRepository {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let atoms: Vec<String> = Vec::deserialize(deserializer)?;
-        let mut atom_index_map = HashMap::with_capacity(atoms.len());
-        for (index, atom) in atoms.iter().enumerate() {
-            atom_index_map.insert(atom.clone(), index);
-        }
-        Ok(Self {
-            atoms,
-            atom_index_map,
-        })
-    }
-}
-
-impl Serialize for ScopeRepository {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.atoms.serialize(serializer)
-    }
 }
 
 impl ScopeRepository {
     fn new() -> Self {
         Self::default()
+    }
+
+    pub fn from_atoms(atoms: Vec<String>) -> Self {
+        let mut atom_index_map = HashMap::with_capacity(atoms.len());
+        for (index, atom) in atoms.iter().enumerate() {
+            atom_index_map.insert(atom.clone(), index);
+        }
+        Self {
+            atoms,
+            atom_index_map,
+        }
     }
 
     /// Get existing index or register new atom, returning repository index
