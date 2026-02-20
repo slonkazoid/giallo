@@ -13,5 +13,5 @@ fn registry_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, registry_benchmark, ser_benchmark);
+criterion_group!(benches, registry_benchmark);
 criterion_main!(benches);
