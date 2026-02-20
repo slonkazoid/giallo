@@ -81,7 +81,7 @@ fn transform_z_anchor(pattern: &str) -> String {
 }
 
 /// A regex wrapper that serializes as a string but compiles lazily at runtime
-#[derive(Serialize, Deserialize,  )]
+#[derive(Serialize, Deserialize)]
 pub struct Regex {
     pattern: String,
     #[serde(skip)]

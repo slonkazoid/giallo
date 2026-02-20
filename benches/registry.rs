@@ -6,8 +6,7 @@ fn registry_benchmark(c: &mut Criterion) {
 
     c.bench_function("registry deserialization", |b| {
         b.iter(|| {
-            let registry =
-                Registry::load_from_compressed_bytes_bench(dump).expect("Failed to load registry");
+            let registry = Registry::load(dump).expect("Failed to load registry");
             std::hint::black_box(registry);
         })
     });

@@ -140,21 +140,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Serialize Registry to compressed bitcode format
     println!("\nSerializing Registry with bitcode + zstd compression...");
 
-    let (buf, uncompressed_size) = registry.dump_to_bytes(None)?;
+    let buf = registry.dump()?;
     let compressed_size = buf.len();
-    let uncompressed_mb = uncompressed_size as f64 / (1024.0 * 1024.0);
 
     let compressed_mb = compressed_size as f64 / (1024.0 * 1024.0);
 
-    // Calculate compression statistics
-    let compression_ratio = uncompressed_size as f64 / compressed_size as f64;
-    let size_reduction = 100.0 - (compressed_size as f64 / uncompressed_size as f64) * 100.0;
-
     println!("\n=== COMPRESSION RESULTS ===");
-    println!("Uncompressed bitcode:     {uncompressed_mb:.2} MiB ({uncompressed_size} bytes)");
     println!("Compressed file:          {compressed_mb:.2} MiB ({compressed_size} bytes)");
-    println!("Compression ratio:        {compression_ratio:.2}x smaller");
-    println!("Size reduction:           {size_reduction:.1}% smaller");
 
     let mut file = std::fs::File::create("builtin.zst")?;
     file.write_all(&buf)?;

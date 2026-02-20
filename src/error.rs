@@ -43,6 +43,10 @@ pub enum Error {
     /// Tried to replace a grammar in the registry after calling `registry.link_grammars()`.
     /// External references to the original grammar will have
     ReplacingGrammarPostLinking(String),
+
+    /// The user tried to create a dump after linking.
+    /// Dump has to be done pre-linking.
+    DumpAfterLinking,
 }
 
 impl fmt::Display for Error {
@@ -64,6 +68,9 @@ impl fmt::Display for Error {
             Error::ReplacingGrammarPostLinking(s) => {
                 write!(f, "Tried to replace grammar `{s}` after linking")
             }
+            Error::DumpAfterLinking => {
+                write!(f, "Cannot dump a registry that has been linked")
+            }
         }
     }
 }
@@ -77,6 +84,7 @@ impl std::error::Error for Error {
             Error::Bitcode(err) => Some(err),
             Error::InvalidHexColor { .. }
             | Error::UnlinkedGrammars
+            | Error::DumpAfterLinking
             | Error::ReplacingGrammarPostLinking(_)
             | Error::GrammarNotFound(_)
             | Error::ThemeNotFound(_)

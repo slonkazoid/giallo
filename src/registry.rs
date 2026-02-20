@@ -21,15 +21,14 @@ use crate::tokenizer::{Token, Tokenizer};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct Dump {
     grammars: Vec<CompiledGrammar>,
-    themes: HashMap<String, CompiledTheme>, // could be just a vec?
-    linked: bool,
+    themes: Vec<CompiledTheme>,
     atoms: Vec<String>,
 }
 
 #[cfg(feature = "dump")]
 impl Dump {
     pub fn restore(self) -> (Registry, ScopeRepository) {
-        let registry = Registry::restore(self.grammars, self.themes, self.linked);
+        let registry = Registry::restore(self.grammars, self.themes);
         let scope_repo = ScopeRepository::from_atoms(self.atoms);
         (registry, scope_repo)
     }
@@ -37,8 +36,7 @@ impl Dump {
     pub fn build(registry: &Registry, scope_repo: &ScopeRepository) -> Self {
         Dump {
             grammars: registry.grammars.clone(),
-            themes: registry.themes.clone(),
-            linked: registry.linked,
+            themes: registry.themes.values().cloned().collect(),
             atoms: scope_repo.atoms.clone(),
         }
     }
@@ -163,16 +161,15 @@ impl Clone for Registry {
 }
 
 impl Registry {
+    #[cfg(feature = "dump")]
     /// Restore a registry from a list of grammars and themes.
     /// This is used in loading dumps.
-    pub fn restore(
-        grammars: Vec<CompiledGrammar>,
-        themes: HashMap<String, CompiledTheme>,
-        linked: bool,
-    ) -> Self {
+    fn restore(grammars: Vec<CompiledGrammar>, all_themes: Vec<CompiledTheme>) -> Self {
         let mut grammar_id_by_scope_name = HashMap::with_capacity(grammars.len());
         let mut grammar_id_by_name = HashMap::with_capacity(grammars.len());
         let mut injections_by_grammar = Vec::with_capacity(grammars.len());
+        let pattern_cache = papaya::HashMap::new();
+        let mut themes = HashMap::with_capacity(all_themes.len());
 
         for grammar in &grammars {
             grammar_id_by_scope_name.insert(grammar.scope_name.to_lowercase(), grammar.id);
@@ -180,7 +177,9 @@ impl Registry {
             injections_by_grammar.push(HashSet::with_capacity(grammar.injections.len()));
         }
 
-        let pattern_cache = papaya::HashMap::new();
+        for theme in all_themes {
+            themes.insert(theme.name.to_lowercase(), theme);
+        }
 
         let mut this = Self {
             grammars,
@@ -188,13 +187,10 @@ impl Registry {
             grammar_id_by_name,
             themes,
             injections_by_grammar,
-            linked,
+            linked: false,
             pattern_cache,
         };
-
-        if linked {
-            this.link_grammars();
-        }
+        this.link_grammars();
 
         this
     }
@@ -543,56 +539,38 @@ impl Registry {
     }
 
     #[cfg(feature = "dump")]
-    /// Dump the registry + scope repository to a binary file that can be loaded later, with an
-    /// optional compression level override (default: 5).
-    pub fn dump_to_bytes(&self, level: Option<i32>) -> GialloResult<(Vec<u8>, u64)> {
+    /// Dump the registry + scope repository to a binary file that can be loaded later.
+    pub fn dump(&self) -> GialloResult<Vec<u8>> {
         use crate::scope::lock_global_scope_repo;
+        if self.linked {
+            return Err(Error::DumpAfterLinking);
+        }
 
-        // Create a Dump containing both Registry and current ScopeRepository
-        let scope_repo = lock_global_scope_repo();
-        let dump = Dump::build(self, &scope_repo);
-        drop(scope_repo);
+        let dump = {
+            let scope_repo = lock_global_scope_repo();
+            Dump::build(self, &scope_repo)
+        };
 
         let bitcode_data = bitcode::serialize(&dump)?;
-        let uncompressed_size = bitcode_data.len() as u64;
-        let compressed = zstd::encode_all(bitcode_data.as_slice(), level.unwrap_or(5))?;
+        let compressed = zstd::encode_all(bitcode_data.as_slice(), 5)?;
 
-        Ok((compressed, uncompressed_size))
+        Ok(compressed)
     }
 
     #[cfg(feature = "dump")]
-    fn decompress(compressed_data: &[u8]) -> GialloResult<Vec<u8>> {
+    /// Loads a byte slice from a dump.
+    pub fn load(buf: &[u8]) -> GialloResult<Self> {
+        use crate::scope::replace_global_scope_repo;
         use std::io::Read;
 
-        let mut decoder = zstd::Decoder::new(compressed_data)?;
+        let mut decoder = zstd::Decoder::new(buf)?;
         let mut data = Vec::new();
         decoder.read_to_end(&mut data)?;
-
-        Ok(data)
-    }
-
-    #[cfg(feature = "dump")]
-    fn load_from_compressed_bytes(compressed_data: &[u8]) -> GialloResult<Self> {
-        let bitcode_data = Self::decompress(compressed_data)?;
-        Self::load_from_serialized_bytes(&bitcode_data)
-    }
-
-    #[cfg(feature = "dump")]
-    fn load_from_serialized_bytes(buffer: &[u8]) -> GialloResult<Self> {
-        use crate::scope::replace_global_scope_repo;
-
-        let dump: Dump = bitcode::deserialize(buffer)?;
+        let dump: Dump = bitcode::deserialize(&data)?;
         let (registry, scope_repo) = dump.restore();
         replace_global_scope_repo(scope_repo);
 
         Ok(registry)
-    }
-
-    #[cfg(feature = "dump")]
-    #[inline(always)]
-    #[doc(hidden)]
-    pub fn load_from_compressed_bytes_bench(compressed_data: &[u8]) -> GialloResult<Self> {
-        Self::load_from_compressed_bytes(compressed_data)
     }
 
     #[cfg(feature = "dump")]
@@ -601,7 +579,7 @@ impl Registry {
     /// to call Registry::load_from_file, only the first one will actually load things.
     pub fn load_from_file(path: impl AsRef<Path>) -> GialloResult<Self> {
         let compressed_data = std::fs::read(path)?;
-        Self::load_from_compressed_bytes(&compressed_data)
+        Self::load(&compressed_data)
     }
 
     #[cfg(feature = "dump")]
@@ -609,7 +587,7 @@ impl Registry {
     /// This is a no-op when called multiple times: eg if you have multiple threads all trying
     /// to call Registry::builtin, only the first one will actually load things.
     pub fn builtin() -> GialloResult<Self> {
-        Self::load_from_compressed_bytes(BUILTIN_DATA)
+        Self::load(BUILTIN_DATA)
     }
 }
 
