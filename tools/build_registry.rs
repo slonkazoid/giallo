@@ -1,7 +1,8 @@
-use giallo::{DumpStats, PLAIN_GRAMMAR_NAME, Registry};
+use giallo::{PLAIN_GRAMMAR_NAME, Registry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct GrammarMetadata {
@@ -136,14 +137,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("- Failed to load: {} themes", theme_errors);
     println!("- Registered aliases: {} total", aliases_registered);
 
-    // Serialize Registry to compressed MessagePack format
-    println!("\nSerializing Registry with MessagePack + zstd compression...");
+    // Serialize Registry to compressed bitcode format
+    println!("\nSerializing Registry with bitcode + zstd compression...");
 
-    // Save compressed version using Registry's dump_to_file method
-    let DumpStats {
-        uncompressed_size,
-        compressed_size,
-    } = registry.dump_to_file("builtin.msgpack")?;
+    let (buf, uncompressed_size) = registry.dump_to_bytes(None)?;
+    let compressed_size = buf.len();
     let uncompressed_mb = uncompressed_size as f64 / (1024.0 * 1024.0);
 
     let compressed_mb = compressed_size as f64 / (1024.0 * 1024.0);
@@ -153,11 +151,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let size_reduction = 100.0 - (compressed_size as f64 / uncompressed_size as f64) * 100.0;
 
     println!("\n=== COMPRESSION RESULTS ===");
-    println!("Uncompressed MessagePack: {uncompressed_mb:.2} MiB ({uncompressed_size} bytes)");
+    println!("Uncompressed bitcode:     {uncompressed_mb:.2} MiB ({uncompressed_size} bytes)");
     println!("Compressed file:          {compressed_mb:.2} MiB ({compressed_size} bytes)");
     println!("Compression ratio:        {compression_ratio:.2}x smaller");
     println!("Size reduction:           {size_reduction:.1}% smaller");
-    println!("✓ Registry saved to builtin.msgpack");
+
+    let mut file = std::fs::File::create("builtin.zst")?;
+    file.write_all(&buf)?;
+    println!("✓ Registry saved to builtin.zst");
 
     println!("\nBuild complete!");
 

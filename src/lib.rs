@@ -7,7 +7,7 @@
 //! use giallo::{HighlightOptions, HtmlRenderer, Options, Registry, ThemeVariant};
 //!
 //! // Using the `dump` feature and loading the prebuilt assets
-//! let registry = Registry::load_from_file("builtin.msgpack")?;
+//! let registry = Registry::load_from_file("builtin.zst")?;
 //! let code = "let x = 42;";
 //!
 //! let options = HighlightOptions::new("javascript", ThemeVariant::Single("catppuccin-frappe"));
@@ -36,7 +36,7 @@ mod tokenizer;
 pub use error::Error;
 pub use highlight::HighlightedText;
 pub use markdown_fence::{ParsedFence, parse_markdown_fence};
-pub use registry::{DumpStats, HighlightOptions, HighlightedCode, PLAIN_GRAMMAR_NAME, Registry};
+pub use registry::{HighlightOptions, HighlightedCode, PLAIN_GRAMMAR_NAME, Registry};
 pub use renderers::{
     RenderOptions, html::DataAttrPosition, html::HtmlRenderer, terminal::TerminalRenderer,
 };

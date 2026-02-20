@@ -26,26 +26,26 @@ struct Dump {
     atoms: Vec<String>,
 }
 
+#[cfg(feature = "dump")]
 impl Dump {
     pub fn restore(self) -> (Registry, ScopeRepository) {
         let registry = Registry::restore(self.grammars, self.themes, self.linked);
         let scope_repo = ScopeRepository::from_atoms(self.atoms);
         (registry, scope_repo)
     }
+
+    pub fn build(registry: &Registry, scope_repo: &ScopeRepository) -> Self {
+        Dump {
+            grammars: registry.grammars.clone(),
+            themes: registry.themes.clone(),
+            linked: registry.linked,
+            atoms: scope_repo.atoms.clone(),
+        }
+    }
 }
 
 #[cfg(feature = "dump")]
-#[derive(Debug, Clone, Copy)]
-/// Extra information about the generated dump.
-pub struct DumpStats {
-    /// Uncompressed dump size/
-    pub uncompressed_size: u64,
-    /// Size on disk after applying compression.
-    pub compressed_size: u64,
-}
-
-#[cfg(feature = "dump")]
-const BUILTIN_DATA: &[u8] = include_bytes!("../builtin.msgpack");
+const BUILTIN_DATA: &[u8] = include_bytes!("../builtin.zst");
 
 /// The default grammar name, where nothing is highlighted
 pub const PLAIN_GRAMMAR_NAME: &str = "plain";
@@ -543,57 +543,52 @@ impl Registry {
     }
 
     #[cfg(feature = "dump")]
-    /// Dump the registry + scope repository to a binary file that can be loaded later
-    pub fn dump_to_file(&self, path: impl AsRef<Path>) -> GialloResult<DumpStats> {
+    /// Dump the registry + scope repository to a binary file that can be loaded later, with an
+    /// optional compression level override (default: 5).
+    pub fn dump_to_bytes(&self, level: Option<i32>) -> GialloResult<(Vec<u8>, u64)> {
         use crate::scope::lock_global_scope_repo;
-        use std::io::{Seek, Write};
 
         // Create a Dump containing both Registry and current ScopeRepository
-        let scope_repo = lock_global_scope_repo().clone();
-        let dump = Dump {
-            grammars: self.grammars.clone(),
-            themes: self.themes.clone(),
-            linked: self.linked,
-            atoms: scope_repo.atoms.clone(),
-        };
+        let scope_repo = lock_global_scope_repo();
+        let dump = Dump::build(self, &scope_repo);
+        drop(scope_repo);
 
-        let msgpack_data = rmp_serde::to_vec(&dump)?;
-        let uncompressed_size = msgpack_data.len() as u64;
-        let file = std::fs::File::create(path)?;
-        let mut encoder = zstd::Encoder::new(file, 5)?;
-        encoder.write_all(&msgpack_data)?;
-        let mut file = encoder.finish()?;
-        let compressed_size = file.seek(std::io::SeekFrom::Current(0))?;
+        let bitcode_data = bitcode::serialize(&dump)?;
+        let uncompressed_size = bitcode_data.len() as u64;
+        let compressed = zstd::encode_all(bitcode_data.as_slice(), level.unwrap_or(5))?;
 
-        Ok(DumpStats {
-            uncompressed_size,
-            compressed_size,
-        })
+        Ok((compressed, uncompressed_size))
+    }
+
+    #[cfg(feature = "dump")]
+    fn decompress(compressed_data: &[u8]) -> GialloResult<Vec<u8>> {
+        use std::io::Read;
+
+        let mut decoder = zstd::Decoder::new(compressed_data)?;
+        let mut data = Vec::new();
+        decoder.read_to_end(&mut data)?;
+
+        Ok(data)
     }
 
     #[cfg(feature = "dump")]
     fn load_from_compressed_bytes(compressed_data: &[u8]) -> GialloResult<Self> {
-        use std::io::Read;
-
-        let mut decoder = zstd::Decoder::new(compressed_data)?;
-        let mut msgpack_data = Vec::new();
-        decoder.read_to_end(&mut msgpack_data)?;
-
-        Self::load_from_serialized_bytes(&msgpack_data)
+        let bitcode_data = Self::decompress(compressed_data)?;
+        Self::load_from_serialized_bytes(&bitcode_data)
     }
 
     #[cfg(feature = "dump")]
     fn load_from_serialized_bytes(buffer: &[u8]) -> GialloResult<Self> {
         use crate::scope::replace_global_scope_repo;
 
-        let dump: Dump = rmp_serde::from_slice(buffer)?;
+        let dump: Dump = bitcode::deserialize(buffer)?;
         let (registry, scope_repo) = dump.restore();
         replace_global_scope_repo(scope_repo);
 
         Ok(registry)
     }
 
-    #[cfg(all(feature = "dump"))]
+    #[cfg(feature = "dump")]
     #[inline(always)]
     #[doc(hidden)]
     pub fn load_from_compressed_bytes_bench(compressed_data: &[u8]) -> GialloResult<Self> {

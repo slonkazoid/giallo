@@ -5,11 +5,12 @@
 //! Each atom is 16 bits, storing repository_index + 1 (0 = unused slot)
 //! Any atom above the 8th will be ignored
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::sync::{Mutex, MutexGuard};
+
+use serde::{Deserialize, Serialize};
 
 pub const MAX_ATOMS_IN_SCOPE: usize = 8;
 // Leaving room for 0 and MAX
@@ -120,6 +121,7 @@ impl ScopeRepository {
         Self::default()
     }
 
+    #[cfg(feature = "dump")]
     pub fn from_atoms(atoms: Vec<String>) -> Self {
         let mut atom_index_map = HashMap::with_capacity(atoms.len());
         for (index, atom) in atoms.iter().enumerate() {

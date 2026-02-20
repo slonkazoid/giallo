@@ -14,7 +14,7 @@ include = [
   "Cargo.toml",
   "/LICENSE",
   "/README.md",
-  "builtin.msgpack",
+  "builtin.zst",
 ]
 
 
@@ -25,7 +25,7 @@ serde = { version = "1", features = ["derive"] }
 papaya = "0.2"
 
 # Optional dependencies for serialization
-rmp-serde = { version = "1.1", optional = true }
+bitcode = { version = "0.6.9", optional = true, features = ["serde"] }
 zstd = { version = "0.13.3", optional = true }
 
 log = { version = "0.4", optional = true }
@@ -33,7 +33,7 @@ log = { version = "0.4", optional = true }
 [features]
 tools = ["dump"]
 debug = ["dep:log"]
-dump = ["dep:rmp-serde", "dep:zstd"]
+dump = ["dep:bitcode", "dep:zstd"]
 
 [dev-dependencies]
 criterion = "0.8"
