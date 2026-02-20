@@ -1,5 +1,6 @@
 /*.iml
 /.idea
+/.vim
 target/
 Cargo.lock
 out.html
